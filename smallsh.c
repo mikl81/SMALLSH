@@ -53,16 +53,16 @@ int main()
 
         char* arg = curr_command->argv[0];
 
-        printf("Begin execution of first command %s /n", arg);
-        if(strcmp(arg, "exit")){
-            printf("exit called /n");
+        printf("Begin execution of first command %s \n", arg);
+        if(strcmp(arg, "exit") == 0){
+            printf("exit called \n");
             return 1;
-        } else if(strcmp(arg, "cd")){
-            printf("CD called /n");
-        } else if(strcmp(arg, "status")){
-            printf("status called /n");
+        } else if(strcmp(arg, "cd") == 0){
+            printf("CD called \n");
+        } else if(strcmp(arg, "status") == 0){
+            printf("status called \n");
         } else {
-            printf("default reached /n");
+            printf("default reached \n");
         };
     }
     return EXIT_SUCCESS;
