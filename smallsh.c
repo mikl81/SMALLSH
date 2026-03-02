@@ -2,6 +2,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
 struct command_line
@@ -44,6 +46,7 @@ struct command_line *parse_input()
     }
     return curr_command;
 }
+
 int main()
 {
     struct command_line *curr_command;
@@ -54,9 +57,13 @@ int main()
         char* arg = curr_command->argv[0];
 
         printf("Begin execution of first command %s \n", arg);
-        if(strcmp(arg, "exit") == 0){
+
+        if(arg == NULL || arg[0] == '#'){
+            printf("Blank or comment line detected \n");
+            continue;
+        } else if(strcmp(arg, "exit") == 0){
             printf("exit called \n");
-            return 1;
+            exit(EXIT_SUCCESS);
         } else if(strcmp(arg, "cd") == 0){
             printf("CD called \n");
         } else if(strcmp(arg, "status") == 0){
