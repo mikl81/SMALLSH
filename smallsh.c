@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <dirent.h>
+#include <signal.h>
 
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
@@ -87,6 +88,37 @@ int change_dir(struct command_line *curr_command)
     }
 };
 
+int execute_external(struct command_line *curr_command)
+{
+    char* testargv[] = { "/bin/ls", "-al", NULL };
+
+    pid_t childPID;
+    int childStatus;
+
+    childPID = fork();
+
+    switch (childPID)
+    {
+    case -1:
+        /* Fork failed */
+        perror("fork()\n");
+        break;
+    case 0:
+        /*Child process*/
+        printf("CHILD(%d) running command %s\n", getpid(), curr_command->argv[0]);
+        execvp(curr_command->argv[0], curr_command->argv);
+        perror("execve");
+        exit(2);
+        break;
+    default:
+        /*Parent process*/
+        childPID = waitpid(childPID, &childStatus, 0);
+        printf("PARENT(%d): child(%d) terminated.\n", getpid(), childPID);
+        break;
+    };
+    return -1;
+};
+
 int main()
 {
     struct command_line *curr_command;
@@ -102,7 +134,7 @@ int main()
         }
         else if (strcmp(command, "exit") == 0)
         {
-            // TODO:ensure child processes are terminated
+            kill(getpid(), SIGTERM);
             exit(EXIT_SUCCESS);
         }
         else if (strcmp(command, "cd") == 0)
@@ -128,28 +160,8 @@ int main()
         else
         {
             printf("Default reached");
-            // printf("default reached \n");
-            // pid_t spawnPid = fork();
-            // int childStatus;
-
-            // switch (spawnPid)
-            // {
-            // case -1:
-            //     /* code */
-            //     perror("fork()\n");
-            //     break;
-            // case 0:
-            //     printf("CHILD(%d) running command %s", getpid(), command);
-            //     execv(command, curr_command->argv);
-            //     perror("execve");
-            //     exit(2);
-            //     break;
-            // default:
-            //     spawnPid = waitpid(spawnPid, &childStatus, 0);
-            //     printf("PARENT(%d): child(%d) terminated.", getpid(), spawnPid);
-            //     break;
+            execute_external(curr_command);
         };
     };
     return EXIT_SUCCESS;
 };
-
