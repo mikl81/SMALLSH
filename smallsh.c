@@ -8,6 +8,9 @@
 
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
+
+int lastStatus;
+
 struct command_line
 {
     char *argv[MAX_ARGS + 1];
@@ -51,8 +54,6 @@ struct command_line *parse_input()
 
 int change_dir(struct command_line *curr_command)
 {
-    // TODO: Implement
-
     // Pull the specified path
     const char *path = curr_command->argv[1];
     if (path != NULL) // If a path was provided
@@ -85,6 +86,14 @@ int change_dir(struct command_line *curr_command)
 
         return 0;
     }
+};
+
+int display_status(){
+    if(WIFEXITED(lastStatus)){
+        printf("exit value %d\n", WEXITSTATUS(lastStatus));
+    } else if (WIFSIGNALED(lastStatus)){
+        printf("terminated by signal %d\n", WTERMSIG(lastStatus));
+    };
 };
 
 int main()
