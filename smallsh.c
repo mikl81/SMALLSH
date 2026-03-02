@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
+
 
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
@@ -47,26 +49,43 @@ struct command_line *parse_input()
     return curr_command;
 }
 
+int change_dir(const char* path){
+    //TODO: Implement
+    if(chdir(path) != 0){ printf("chdir failed \n"); return -1; };
+    return 0;
+};
+
 int main()
 {
     struct command_line *curr_command;
     while (true)
     {
-        curr_command = parse_input();
+        curr_command = parse_input(); //Generate curr command struct
 
-        char* arg = curr_command->argv[0];
+        char* command = curr_command->argv[0]; //pull first command arg i.e. command to call
 
-        printf("Begin execution of first command %s \n", arg);
-
-        if(arg == NULL || arg[0] == '#'){
-            printf("Blank or comment line detected \n");
-            continue;
-        } else if(strcmp(arg, "exit") == 0){
-            printf("exit called \n");
+        if(command == NULL || command[0] == '#'){
+            continue; //Skip blank or comment lines
+        } else if(strcmp(command, "exit") == 0){
+            //TODO:ensure child processes are terminated
             exit(EXIT_SUCCESS);
-        } else if(strcmp(arg, "cd") == 0){
-            printf("CD called \n");
-        } else if(strcmp(arg, "status") == 0){
+        } else if(strcmp(command, "cd") == 0){
+            const char* path = curr_command->argv[1];
+            if(path != NULL)
+            {
+                printf("Path provided %s \n", path);
+                change_dir(path);
+            } else{
+                //Get home dir var and use it as the path
+                const char* homeDIR = getenv("HOME");
+                printf("Attempting change dir to %s \n", homeDIR);
+                change_dir(homeDIR);
+
+                //Testing path
+                //const char* pwd = getcwd();
+                //printf("Changed dir to: %s", )
+            }
+        } else if(strcmp(command, "status") == 0){
             printf("status called \n");
         } else {
             printf("default reached \n");
