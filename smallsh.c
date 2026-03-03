@@ -9,10 +9,21 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+/*
+Program: SMALLSH
+Name: Michael Fitzgibbon Perry
+Description: This program functions as a self built linux shell with exit, status, cd created internally and other
+    methods handled using exec(). Signals are captured and handled appropriately to provide users with expected
+    behavior of a shell
+Input: Program requires no input
+Output: Program does not provide output outside of terminal
+*/
+
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
 
 int lastStatus = 0;
+bool allowBG = true;
 
 struct command_line
 {
@@ -22,6 +33,14 @@ struct command_line
     char *output_file;
     bool is_bg;
 };
+
+/*
+Function: parse_input
+Author: This function and its associated struct were provided in starter code
+Description: Parses users input into our shells command line and generates a command_line struct for output (see above)
+Input: User input into our shell command line
+Return: struct command_line current_command
+*/
 struct command_line *parse_input()
 {
     char input[INPUT_LENGTH];
@@ -54,8 +73,15 @@ struct command_line *parse_input()
     }
     return curr_command;
 }
-
-int change_dir(struct command_line *curr_command)
+/*
+Function: change_dir
+Author: Michael Fitzgibbon Perry
+Description: This function changes the current working directory to either the provided path in command struct,
+    or the default home path if none is provided
+Input: struct command_line current_command
+Return: None
+*/
+void change_dir(struct command_line *curr_command)
 {
     // Pull the specified path
     const char *path = curr_command->argv[1];
@@ -67,15 +93,15 @@ int change_dir(struct command_line *curr_command)
             if (chdir(path) != 0)
             {
                 perror("DIRECTORY ERROR");
-                return -1;
+                return;
             };
         }
         else // If a path was not provided
         {
             perror("DIRECTORY ERROR");
-            return -1;
+            return;
         }
-        return 0;
+        return;
     }
     else
     {
@@ -84,14 +110,68 @@ int change_dir(struct command_line *curr_command)
         if (chdir(homeDIR) != 0)
         {
             perror("DIRECTORY ERROR");
-            return -1;
+            return;
         };
 
-        return 0;
+        return;
     }
 };
 
-int execute_external(struct command_line *curr_command)
+/*
+Function: handle_SIGINT
+Author: Michael Fitzgibbon Perry
+Description: This handles SIGINT to prevent it from interrupting the shell
+Input: bool allow_interupt - specifies if we handle the SIGINT normally or ignore it
+Return: None
+*/
+void handle_SIGINT(bool allow_interupt)
+{
+    struct sigaction SIGINT_action = {0};
+
+    if (allow_interupt)
+    {
+        SIGINT_action.sa_handler = SIG_DFL; // Restore default behavior
+    }
+    else
+    {
+        SIGINT_action.sa_handler = SIG_IGN; // Ignore the signal
+    };
+
+    sigfillset(&SIGINT_action.sa_mask);
+    SIGINT_action.sa_flags = 0;
+    sigaction(SIGINT, &SIGINT_action, NULL);
+};
+/*
+Function: handle_SIGSTP
+Author: Michael Fitzgibbon Perry
+Description: This function handles the toggle of the allow BG global bool to allow the toggling of FG only mode
+Input: None
+Return: None
+*/
+void handle_SIGTSTP()
+{
+    if (allowBG)
+    {
+        char *message = "Entering foreground-only mode (& is now ignored)\n: ";
+        write(STDOUT_FILENO, message, 52);
+        allowBG = !allowBG;
+    }
+    else
+    {
+        char *message = "Exiting foreground-only mode\n: ";
+        write(STDOUT_FILENO, message, 31);
+        allowBG = !allowBG;
+    }
+};
+/*
+Function: execute_external
+Author: Michael Fitzgibbon Perry
+Description: This function executes the external shell function when the user inputs a function that is not
+    one of our built in functions. Allows for &, >, and <. Does not allow for |.
+Input: struct command_line current_command
+Return: None
+*/
+void execute_external(struct command_line *curr_command)
 {
     pid_t childPID;
     int childStatus;
@@ -101,14 +181,12 @@ int execute_external(struct command_line *curr_command)
     // set default for bg without input
     if (input_file == NULL && curr_command->is_bg)
     {
-        printf("Setting input to default");
         input_file = "/dev/null";
     };
 
     // set default for bg without ouput
     if (output_file == NULL && curr_command->is_bg)
     {
-        printf("Setting output to default");
         output_file = "/dev/null";
     };
 
@@ -124,9 +202,9 @@ int execute_external(struct command_line *curr_command)
     case 0:
         /*Child process*/
 
-        if (curr_command->is_bg == false)
+        if (curr_command->is_bg == false && allowBG)
         {
-            // TODO: handle sigint
+            handle_SIGINT(true);
         };
 
         if (input_file != NULL)
@@ -177,7 +255,7 @@ int execute_external(struct command_line *curr_command)
         break;
     default:
         /*Parent process*/
-        if (curr_command->is_bg)
+        if (curr_command->is_bg && allowBG)
         {
             printf("background pid is %d", childPID);
             fflush(stdout);
@@ -197,10 +275,14 @@ int execute_external(struct command_line *curr_command)
         // printf("PARENT(%d): child(%d) terminated.\n", getpid(), childPID);
         break;
     };
-
-    return -1;
 };
-
+/*
+Function: get_status
+Author: Michael Fitzgibbon Perry
+Description: This function prints out either the exit status or the terminating signal of the last foreground process ran by the shell.
+Input: None
+Return: None
+*/
 int get_status()
 {
     if (WIFEXITED(lastStatus))
@@ -213,8 +295,26 @@ int get_status()
     }
 };
 
+/*
+Function: get_status
+Author: Michael Fitzgibbon Perry
+Description: This function prints out either the exit status or the terminating signal of the last foreground process ran by the shell.
+Input: None
+Return: None
+*/
+
 void main()
 {
+    //Prevent CTRL-C behavior
+    handle_SIGINT(false);
+
+    // Toggle allow background mode on Ctrl-Z
+    struct sigaction SIGTSTP_action = {0};
+    SIGTSTP_action.sa_handler = handle_SIGTSTP;
+    sigfillset(&SIGTSTP_action.sa_mask);
+    SIGTSTP_action.sa_flags = SA_RESTART;
+    sigaction(SIGTSTP, &SIGTSTP_action, NULL);
+
     struct command_line *curr_command;
     while (true)
     {
@@ -222,35 +322,23 @@ void main()
 
         char *command = curr_command->argv[0]; // pull first command arg i.e. command to call
 
-        if (command == NULL || command[0] == '#')
+        if (command == NULL || command[0] == '#')// Skip blank or comment lines
         {
-            continue; // Skip blank or comment lines
+            continue; 
         }
-        else if (strcmp(command, "exit") == 0)
+        else if (strcmp(command, "exit") == 0)// Exit program
         {
             exit(EXIT_SUCCESS);
         }
-        else if (strcmp(command, "cd") == 0)
+        else if (strcmp(command, "cd") == 0)// Change the directory
         {
-
             change_dir(curr_command);
-
-            // Testing path
-            // long size;
-            // char *buf;
-            // char *ptr;
-
-            // size = pathconf(".", _PC_PATH_MAX);
-
-            // if ((buf = (char *)malloc((size_t)size)) != NULL)
-            //     ptr = getcwd(buf, (size_t)size);
-            // printf("Changed dir to: %s \n", ptr);
         }
-        else if (strcmp(command, "status") == 0)
+        else if (strcmp(command, "status") == 0)// Print status
         {
             get_status();
         }
-        else
+        else // Not a built in function, call externally
         {
             execute_external(curr_command);
         };
