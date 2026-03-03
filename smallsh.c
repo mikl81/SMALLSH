@@ -123,13 +123,12 @@ int execute_external(struct command_line *curr_command)
 
         if (curr_command->is_bg == false)
         {
-            // handle sigint
+            // TODO: handle sigint
         };
 
         if (input_file != NULL)
         {
             // handle input redirection
-            printf("Current input file %s \n", curr_command->input_file);
             int sourceFD = open(input_file, O_RDONLY);
 
             if (sourceFD == -1)
@@ -150,7 +149,6 @@ int execute_external(struct command_line *curr_command)
         if (output_file != NULL)
         {
             // handle output redirection
-            printf("Current output file %s \n", curr_command->output_file);
 
             int sourceFD = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
@@ -176,10 +174,21 @@ int execute_external(struct command_line *curr_command)
         break;
     default:
         /*Parent process*/
-        childPID = waitpid(childPID, &childStatus, 0);
+        if(curr_command->is_bg){
+            printf("background pid is %d", childPID);
+            fflush(stdout);
+        } else{
+            childPID = waitpid(childPID, &childStatus, 0);
+            if(WIFSIGNALED(childStatus) == EXIT_FAILURE && WTERMSIG(childStatus) != 0){
+                //TODO
+            }
+        };
+
+        
         // printf("PARENT(%d): child(%d) terminated.\n", getpid(), childPID);
         break;
     };
+
     return -1;
 };
 
