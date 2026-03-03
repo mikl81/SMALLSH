@@ -5,6 +5,9 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <dirent.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
@@ -51,8 +54,6 @@ struct command_line *parse_input()
 
 int change_dir(struct command_line *curr_command)
 {
-    // TODO: Implement
-
     // Pull the specified path
     const char *path = curr_command->argv[1];
     if (path != NULL) // If a path was provided
@@ -87,6 +88,110 @@ int change_dir(struct command_line *curr_command)
     }
 };
 
+int execute_external(struct command_line *curr_command)
+{
+    pid_t childPID;
+    int childStatus;
+    char *input_file = curr_command->input_file;
+    char *output_file = curr_command->output_file;
+
+    // set default for bg without input
+    if (input_file == NULL && curr_command->is_bg)
+    {
+        printf("Setting input to default");
+        input_file = "/dev/null";
+    };
+
+    // set default for bg without ouput
+    if (output_file == NULL && curr_command->is_bg)
+    {
+        printf("Setting output to default");
+        output_file = "/dev/null";
+    };
+
+    // Fork child
+    childPID = fork();
+
+    switch (childPID)
+    {
+    case -1:
+        /* Fork failed */
+        perror("fork()\n");
+        exit(1);
+    case 0:
+        /*Child process*/
+
+        if (curr_command->is_bg == false)
+        {
+            // TODO: handle sigint
+        };
+
+        if (input_file != NULL)
+        {
+            // handle input redirection
+            int sourceFD = open(input_file, O_RDONLY);
+
+            if (sourceFD == -1)
+            {
+                perror("Error on input open");
+                exit(1);
+            };
+
+            if (dup2(sourceFD, 0) == -1)
+            {
+                perror("Error on input file dup2");
+                exit(1);
+            };
+
+            close(sourceFD);
+        };
+
+        if (output_file != NULL)
+        {
+            // handle output redirection
+
+            int sourceFD = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+            if (sourceFD == -1)
+            {
+                perror("Error on output open");
+                exit(1);
+            };
+
+            if (dup2(sourceFD, 1) == -1)
+            {
+                perror("Error on output file dup2");
+                exit(1);
+            };
+
+            close(sourceFD);
+        };
+
+        // printf("CHILD(%d) running command %s\n", getpid(), curr_command->argv[0]);
+        execvp(curr_command->argv[0], curr_command->argv);
+        perror("execve");
+        exit(2);
+        break;
+    default:
+        /*Parent process*/
+        if(curr_command->is_bg){
+            printf("background pid is %d", childPID);
+            fflush(stdout);
+        } else{
+            childPID = waitpid(childPID, &childStatus, 0);
+            if(WIFSIGNALED(childStatus) == EXIT_FAILURE && WTERMSIG(childStatus) != 0){
+                //TODO
+            }
+        };
+
+        
+        // printf("PARENT(%d): child(%d) terminated.\n", getpid(), childPID);
+        break;
+    };
+
+    return -1;
+};
+
 int main()
 {
     struct command_line *curr_command;
@@ -102,7 +207,7 @@ int main()
         }
         else if (strcmp(command, "exit") == 0)
         {
-            // TODO:ensure child processes are terminated
+            kill(getpid(), SIGTERM);
             exit(EXIT_SUCCESS);
         }
         else if (strcmp(command, "cd") == 0)
@@ -111,15 +216,15 @@ int main()
             change_dir(curr_command);
 
             // Testing path
-            long size;
-            char *buf;
-            char *ptr;
+            // long size;
+            // char *buf;
+            // char *ptr;
 
-            size = pathconf(".", _PC_PATH_MAX);
+            // size = pathconf(".", _PC_PATH_MAX);
 
-            if ((buf = (char *)malloc((size_t)size)) != NULL)
-                ptr = getcwd(buf, (size_t)size);
-            printf("Changed dir to: %s \n", ptr);
+            // if ((buf = (char *)malloc((size_t)size)) != NULL)
+            //     ptr = getcwd(buf, (size_t)size);
+            // printf("Changed dir to: %s \n", ptr);
         }
         else if (strcmp(command, "status") == 0)
         {
@@ -127,29 +232,8 @@ int main()
         }
         else
         {
-            printf("Default reached");
-            // printf("default reached \n");
-            // pid_t spawnPid = fork();
-            // int childStatus;
-
-            // switch (spawnPid)
-            // {
-            // case -1:
-            //     /* code */
-            //     perror("fork()\n");
-            //     break;
-            // case 0:
-            //     printf("CHILD(%d) running command %s", getpid(), command);
-            //     execv(command, curr_command->argv);
-            //     perror("execve");
-            //     exit(2);
-            //     break;
-            // default:
-            //     spawnPid = waitpid(spawnPid, &childStatus, 0);
-            //     printf("PARENT(%d): child(%d) terminated.", getpid(), spawnPid);
-            //     break;
+            execute_external(curr_command);
         };
     };
     return EXIT_SUCCESS;
 };
-
