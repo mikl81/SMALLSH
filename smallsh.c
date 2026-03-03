@@ -11,6 +11,9 @@
 
 #define INPUT_LENGTH 2048
 #define MAX_ARGS 512
+
+int lastStatus = 0;
+
 struct command_line
 {
     char *argv[MAX_ARGS + 1];
@@ -169,22 +172,28 @@ int execute_external(struct command_line *curr_command)
 
         // printf("CHILD(%d) running command %s\n", getpid(), curr_command->argv[0]);
         execvp(curr_command->argv[0], curr_command->argv);
-        perror("execve");
-        exit(2);
+        perror("execpe failed");
+        exit(1);
         break;
     default:
         /*Parent process*/
-        if(curr_command->is_bg){
+        if (curr_command->is_bg)
+        {
             printf("background pid is %d", childPID);
             fflush(stdout);
-        } else{
-            childPID = waitpid(childPID, &childStatus, 0);
-            if(WIFSIGNALED(childStatus) == EXIT_FAILURE && WTERMSIG(childStatus) != 0){
-                //TODO
+        }
+        else
+        {
+            waitpid(childPID, &childStatus, 0);
+
+            lastStatus = childStatus;
+            if (WIFSIGNALED(childStatus))
+            {
+                printf("terminated by signal %d\n", WTERMSIG(childStatus));
+                fflush(stdout);
             }
         };
 
-        
         // printf("PARENT(%d): child(%d) terminated.\n", getpid(), childPID);
         break;
     };
@@ -192,7 +201,19 @@ int execute_external(struct command_line *curr_command)
     return -1;
 };
 
-int main()
+int get_status()
+{
+    if (WIFEXITED(lastStatus))
+    {
+        printf("exit value %d\n", WEXITSTATUS(lastStatus));
+    }
+    else if (WIFSIGNALED(lastStatus))
+    {
+        printf("terminated by signal %d\n", WTERMSIG(lastStatus));
+    }
+};
+
+void main()
 {
     struct command_line *curr_command;
     while (true)
@@ -207,7 +228,6 @@ int main()
         }
         else if (strcmp(command, "exit") == 0)
         {
-            kill(getpid(), SIGTERM);
             exit(EXIT_SUCCESS);
         }
         else if (strcmp(command, "cd") == 0)
@@ -228,12 +248,11 @@ int main()
         }
         else if (strcmp(command, "status") == 0)
         {
-            printf("status called \n");
+            get_status();
         }
         else
         {
             execute_external(curr_command);
         };
     };
-    return EXIT_SUCCESS;
 };
