@@ -257,7 +257,7 @@ void execute_external(struct command_line *curr_command)
         /*Parent process*/
         if (curr_command->is_bg && allowBG)
         {
-            printf("background pid is %d", childPID);
+            printf("background pid is %d\n", childPID);
             fflush(stdout);
         }
         else
@@ -271,8 +271,6 @@ void execute_external(struct command_line *curr_command)
                 fflush(stdout);
             }
         };
-
-        // printf("PARENT(%d): child(%d) terminated.\n", getpid(), childPID);
         break;
     };
 };
@@ -296,16 +294,16 @@ int get_status()
 };
 
 /*
-Function: get_status
+Function: main
 Author: Michael Fitzgibbon Perry
-Description: This function prints out either the exit status or the terminating signal of the last foreground process ran by the shell.
+Description: The main function which prompts the user for input and calls methods accordingly
 Input: None
 Return: None
 */
 
 void main()
 {
-    //Prevent CTRL-C behavior
+    // Prevent CTRL-C behavior
     handle_SIGINT(false);
 
     // Toggle allow background mode on Ctrl-Z
@@ -318,23 +316,39 @@ void main()
     struct command_line *curr_command;
     while (true)
     {
+        // Cleanup loop for BG processes
+        int bgStatus;
+        pid_t bgPID;
+        while ((bgPID = waitpid(-1, &bgStatus, WNOHANG)) > 0)
+        {
+            if (WIFEXITED(bgStatus))
+            {
+                printf("background pid %d is done: exit value %d\n", bgPID, WEXITSTATUS(bgStatus));
+            }
+            else if (WIFSIGNALED(bgStatus))
+            {
+                printf("background pid %d is done: terminated by signal %d\n", bgPID, WTERMSIG(bgStatus));
+            }
+            fflush(stdout);
+        };
+
         curr_command = parse_input(); // Generate curr command struct
 
         char *command = curr_command->argv[0]; // pull first command arg i.e. command to call
 
-        if (command == NULL || command[0] == '#')// Skip blank or comment lines
+        if (command == NULL || command[0] == '#') // Skip blank or comment lines
         {
-            continue; 
+            continue;
         }
-        else if (strcmp(command, "exit") == 0)// Exit program
+        else if (strcmp(command, "exit") == 0) // Exit program
         {
             exit(EXIT_SUCCESS);
         }
-        else if (strcmp(command, "cd") == 0)// Change the directory
+        else if (strcmp(command, "cd") == 0) // Change the directory
         {
             change_dir(curr_command);
         }
-        else if (strcmp(command, "status") == 0)// Print status
+        else if (strcmp(command, "status") == 0) // Print status
         {
             get_status();
         }
